@@ -31,6 +31,13 @@
       border: 1px solid #ddd;
       border-radius: 10px;
     }
+    #stats {
+      margin-top: 1rem;
+      background: #fff;
+      padding: 1rem;
+      border-radius: 8px;
+      box-shadow: 0 0 5px rgba(0, 0, 0, 0.1);
+    }
   </style>
 </head>
 <body>
@@ -39,6 +46,7 @@
     <input type="file" id="fileInput" style="display: none;">
   </div>
   <div id="cy"></div>
+  <div id="stats"></div>
 
   <script>
     const dropzone = document.getElementById('dropzone');
@@ -70,6 +78,9 @@
 
     function visualizeProcess(data) {
       const cases = {};
+      const edgeCount = {};
+      const activityCount = {};
+
       data.forEach(row => {
         const id = row.CaseID;
         if (!cases[id]) cases[id] = [];
@@ -80,29 +91,44 @@
       const nodesSet = new Set();
       Object.values(cases).forEach(events => {
         events.sort((a, b) => a.timestamp - b.timestamp);
-        for (let i = 0; i < events.length - 1; i++) {
-          const from = events[i].activity;
-          const to = events[i + 1].activity;
-          nodesSet.add(from);
-          nodesSet.add(to);
-          edgesSet.add(`${from}=>${to}`);
+        for (let i = 0; i < events.length; i++) {
+          const activity = events[i].activity;
+          nodesSet.add(activity);
+          activityCount[activity] = (activityCount[activity] || 0) + 1;
+          if (i < events.length - 1) {
+            const from = activity;
+            const to = events[i + 1].activity;
+            const edgeKey = `${from}=>${to}`;
+            edgesSet.add(edgeKey);
+            edgeCount[edgeKey] = (edgeCount[edgeKey] || 0) + 1;
+          }
         }
       });
 
-      const elements = Array.from(nodesSet).map(n => ({ data: { id: n } }));
-      elements.push(...Array.from(edgesSet).map(e => {
-        const [from, to] = e.split('=>');
-        return { data: { id: e, source: from, target: to } };
+      const elements = Array.from(nodesSet).map(n => ({
+        data: { id: n, label: `${n} (${activityCount[n]})` }
       }));
 
-      cytoscape({
+      elements.push(...Array.from(edgesSet).map(e => {
+        const [from, to] = e.split('=>');
+        return {
+          data: {
+            id: e,
+            source: from,
+            target: to,
+            label: edgeCount[e].toString()
+          }
+        };
+      }));
+
+      const cy = cytoscape({
         container: document.getElementById('cy'),
         elements,
         style: [
           {
             selector: 'node',
             style: {
-              'label': 'data(id)',
+              'label': 'data(label)',
               'text-valign': 'center',
               'text-halign': 'center',
               'background-color': '#0077cc',
@@ -110,7 +136,6 @@
               'text-outline-color': '#0077cc',
               'text-outline-width': 2,
               'font-size': '12px',
-              'padding': '10px',
               'shape': 'roundrectangle'
             }
           },
@@ -118,10 +143,14 @@
             selector: 'edge',
             style: {
               'width': 2,
+              'label': 'data(label)',
+              'font-size': '10px',
               'line-color': '#aaa',
               'target-arrow-shape': 'triangle',
               'target-arrow-color': '#aaa',
-              'curve-style': 'bezier'
+              'curve-style': 'bezier',
+              'text-background-color': '#fff',
+              'text-background-opacity': 1
             }
           }
         ],
@@ -131,6 +160,9 @@
           padding: 10
         }
       });
+
+      const stats = document.getElementById('stats');
+      stats.innerHTML = `<strong>${Object.keys(cases).length}</strong> Fälle, <strong>${nodesSet.size}</strong> Aktivitäten, <strong>${edgesSet.size}</strong> Übergänge.`;
     }
   </script>
 </body>
